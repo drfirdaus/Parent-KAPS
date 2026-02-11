@@ -1,0 +1,498 @@
+---
+title: "CFA Attitude V1 for Thesis"
+author: "firdaus"
+format: 
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-depth: 6
+    number-sections: true
+    self-contained: true
+editor: visual
+---
+
+# Preliminaries
+
+## Load Library
+
+```{r}
+library(readxl)
+library(foreign)
+library(psych)
+library(lavaan)  # for CFA
+library(semTools)  # for additional functions in SEM
+library(semPlot)  # for path diagram
+```
+
+## Load Data
+
+```{r}
+data1 = read_excel("CFA_Attitude_V2.xlsx")
+names(data1)
+head(data1)
+dim(data1)
+
+```
+
+### Coding the answers
+
+```{r}
+# Define mapping functions
+likert_map <- function(x) {
+  recode <- c(
+    "Sangat tidak setuju" = 1,
+    "Tidak setuju"        = 2,
+    "Tidak pasti"         = 3,
+    "Setuju"              = 4,
+    "Sangat setuju"       = 5
+  )
+  recode[match(tolower(x), tolower(names(recode)))]
+}
+
+likert_reverse <- function(x) {
+  recode <- c(
+    "Sangat tidak setuju" = 5,
+    "Tidak setuju"        = 4,
+    "Tidak pasti"         = 3,
+    "Setuju"              = 2,
+    "Sangat setuju"       = 1
+  )
+  recode[match(tolower(x), tolower(names(recode)))]
+}
+
+# List of reverse-coded items
+reverse_items <- c("A7","A8","A10","A11","A12","A13","A14")
+
+# Apply transformation from data1 -> data2
+data2 <- data1
+
+for (col in names(data2)) {
+  if (col %in% reverse_items) {
+    data2[[col]] <- likert_reverse(data2[[col]])
+  } else {
+    data2[[col]] <- likert_map(data2[[col]])
+  }
+}
+
+# Convert all to numeric
+data2 <- as.data.frame(lapply(data2, as.numeric))
+```
+
+From EFA, we include only good items across PA1 till PA4.
+
+PA3 (Sex Ed Importance ) : A1, A2, A3, A4, A5, A6 (6 item)
+
+PA2 (Sex Ed Concerns) : A7, A8, A10 (3 item)
+
+PA4 (Soc Sensitivity): A11, A12, A13, A14 (4 item)
+
+PA1 (Parent Role): A16, A19, A20, A21, A22, A23, A26, A33, A35 (9 item)
+
+```{r}
+data.cfa = data2[c("A1", "A2","A3", "A4", "A5", "A6", "A7", "A8", "A10", "A11", "A12", "A13", "A14", "A16", "A19", "A20", "A21", "A22", "A23", "A26", "A33", "A35")]
+```
+
+```{r}
+str(data.cfa)
+```
+
+```{r}
+dim(data.cfa)
+```
+
+```{r}
+names(data.cfa)
+```
+
+```{r}
+head(data.cfa)
+```
+
+# Confirmatory factor analysis
+
+## Preliminary steps
+
+### **Descriptive statistics**
+
+Check minimum/maximum values per item, and screen for any missing values,
+
+```{r}
+describe(data.cfa)
+```
+
+Note that all *n* = 201, no missing values. `min`–`max` cover the whole range of response options.
+
+\% of response to options per item,
+
+```{r}
+response.frequencies(data.cfa)
+```
+
+### **Multivariate normality**
+
+This is done to check the multivariate normality of the data. If the data are normally distributed, we may use maximum likelihood (ML) estimation method for the CFA.
+
+```{r}
+mardia(data.cfa)
+```
+
+the data are not multivariate normal (`kurtosis` \> 5, *P* \< 0.05). We will use **MLR** in our analysis.
+
+## Step 1
+
+Specify the measurement model according to `lavaan` syntax.
+
+```{r}
+model1 = "
+PA1 =~ A16 + A19 + A20 + A21 + A22 + A23 + A26 + A33 + A35
+PA2 =~ A7 + A8 + A10
+PA3 =~ A1 + A2 + A3 + A4 + A5 + A6
+PA4 =~ A11 + A12 + A13 + A14
+"
+```
+
+PA3 (Sex Ed Importance ) : A1, A2, A3, A4, A5, A6 (6 item)
+
+PA2 (Sex Ed Concerns) : A7, A8, A10 (3 item)
+
+PA4 (Soc Sensitivity): A11, A12, A13, A14 (4 item)
+
+PA1 (Parent Role): A16, A19, A20, A21, A22, A23, A26, A33, A35 (9 item)
+
+## Step 2
+
+### Fit the model 1
+
+```{r}
+cfa.model1 = cfa(model1, data = data.cfa, estimator = "MLR")
+# cfa.model = cfa(model, data = data.cfa, std.lv = 1)  # factor variance = 1
+summary(cfa.model1, fit.measures = T, standardized = T)
+```
+
+The four-factor CFA model demonstrated marginal fit to the data, χ²(203) = 756.878, p \< .001, CFI = 0.857, TLI = 0.838, RMSEA = 0.136 \[90% CI: 0.125–0.146\], SRMR = 0.064. All standardized loadings were significant (0.535–0.988), supporting convergent validity. Factor correlations ranged from 0.044 to 0.448, indicating adequate discriminant validity. Although the overall model fit did not reach ideal thresholds (CFI ≥ 0.90, RMSEA ≤ 0.08), the pattern of loadings suggests that the hypothesized structure is conceptually sound and may benefit from minor re-specifications or correlated residuals.
+
+```{r}
+standardizedSolution(cfa.model1)  # standardized, to view the SE of FL
+```
+
+```{r}
+parameterEstimates(cfa.model1)  # unstandardized, to view the 95% CI
+```
+
+Localized areas of misfit,
+
+```{r}
+modificationIndices(cfa.model1, sort = TRUE, minimum.value = 3.84) # find mi > |3.84|
+```
+
+```{r}
+residuals(cfa.model1, type="standardized") # find sr > |2.58|
+```
+
+## Step 3
+
+### Refine Model 2
+
+```{r}
+# Step 1: Add strongest correlated residuals
+model2 <- '
+  PA1 =~ A16 + A19 + A20 + A21 + A22 + A23 + A26 + A33 + A35
+  PA2 =~ A7 + A8 + A10
+  PA3 =~ A1 + A2 + A3 + A4 + A5 + A6
+  PA4 =~ A11 + A12 + A13 + A14
+  
+  # Correlated residuals (theoretically justified)
+  A13 ~~ A14
+'
+
+
+cfa.model2 = cfa(model2, data = data.cfa, estimator = "MLR")
+# cfa.model = cfa(model, data = data.cfa, std.lv = 1)  # factor variance = 1
+summary(cfa.model2, fit.measures = T, standardized = T)
+
+```
+
+```{r}
+modificationIndices(cfa.model2, sort = TRUE, minimum.value = 3.84) # find mi > |3.84|
+```
+
+```{r}
+residuals(cfa.model2, type="standardized") # find sr > |2.58|
+```
+
+### Refine Model 3 (Remove A11)
+
+```{r}
+model3 <- '
+  # Factors
+  PA1 =~ A16 + A19 + A20 + A21 + A22 + A23 + A26 + A33 + A35
+  PA2 =~ A7 + A8 + A10
+  PA3 =~ A1 + A2 + A3 + A4 + A5 + A6
+  
+  #remove A12
+  PA4 =~ A11 + A13 + A14 
+  
+  # Correlated residuals (theoretically justified)
+   A13 ~~ A14
+ '
+
+cfa.model3 = cfa(model3, data = data.cfa, estimator = "MLR")
+# cfa.model = cfa(model, data = data.cfa, std.lv = 1)  # factor variance = 1
+summary(cfa.model3, fit.measures = T, standardized = T)
+
+```
+
+```{r}
+modificationIndices(cfa.model3, sort = TRUE, minimum.value = 3.84) # find mi > |3.84|
+```
+
+```{r}
+residuals(cfa.model3, type="standardized") # find sr > |2.58|
+```
+
+### Refine Model 4
+
+```{r}
+model4 <- '
+  # Factors
+  PA1 =~ A16 + A19 + A20 + A21 + A22 + A23 + A26 + A33 + A35
+  PA2 =~ A7 + A8 + A10
+  PA3 =~ A1 + A2 + A3 + A4 + A5 + A6
+  
+  #remove A12
+  PA4 =~ A11 + A13 + A14 
+  
+  
+  # Correlated residuals (theoretically justified)
+  A13 ~~ A14
+  A1 ~~ A2
+  
+'
+
+cfa.model4 = cfa(model4, data = data.cfa, estimator = "MLR")
+# cfa.model = cfa(model, data = data.cfa, std.lv = 1)  # factor variance = 1
+summary(cfa.model4, fit.measures = T, standardized = T)
+```
+
+```{r}
+modificationIndices(cfa.model4, sort = TRUE, minimum.value = 3.84) # find mi > |3.84|
+```
+
+```{r}
+residuals(cfa.model4, type="standardized") # find sr > |2.58|
+```
+
+### Refine Model 5
+
+```{r}
+model5 <- '
+  # Factors
+  PA1 =~ A16 + A19 + A20 + A21 + A22 + A23 + A26 + A33 + A35
+  PA2 =~ A7 + A8 + A10
+  PA3 =~ A1 + A2 + A3 + A4 + A5 + A6
+  
+  #remove A12
+  PA4 =~ A11 + A13 + A14 
+ 
+  # Correlated
+  A13 ~~ A14
+  A1 ~~ A2
+  A23 ~~ A26
+  
+  
+'
+
+cfa.model5 = cfa(model5, data = data.cfa, estimator = "MLR")
+# cfa.model = cfa(model, data = data.cfa, std.lv = 1)  # factor variance = 1
+summary(cfa.model5, fit.measures = T, standardized = T)
+```
+
+```{r}
+modificationIndices(cfa.model5, sort = TRUE, minimum.value = 3.84) # find mi > |3.84|
+```
+
+```{r}
+residuals(cfa.model5, type="standardized") # find sr > |2.58|
+```
+
+### Model Refine 6
+
+```{r}
+model6 <- '
+  # Factors
+  PA1 =~ A16 + A19 + A20 + A21 + A22 + A23 + A26 + A33 + A35
+  PA2 =~ A7 + A8 + A10
+  PA3 =~ A1 + A2 + A3 + A4 + A5 + A6
+ 
+  #remove A12
+  PA4 =~ A11 + A13 + A14  
+  
+  # Correlated
+  A13 ~~ A14
+  A1 ~~ A2
+  A23 ~~ A26
+  A33 ~~ A35
+
+
+'
+
+cfa.model6 = cfa(model6, data = data.cfa, estimator = "MLR")
+# cfa.model = cfa(model, data = data.cfa, std.lv = 1)  # factor variance = 1
+summary(cfa.model6, fit.measures = T, standardized = T)
+```
+
+# Comparing the Models
+
+```{r}
+# Grab key measures
+want <- c( "chisq.scaled", "df", "cfi.scaled", "tli.scaled", "rmsea.scaled", "rmsea.ci.lower.scaled", "rmsea.ci.upper.scaled",  "srmr")
+
+fm1 <- fitMeasures(cfa.model1, fit.measures = want)
+fm2 <- fitMeasures(cfa.model2, fit.measures = want)
+fm3 <- fitMeasures(cfa.model3, fit.measures = want)
+fm4 <- fitMeasures(cfa.model4, fit.measures = want)
+fm5 <- fitMeasures(cfa.model5, fit.measures = want)
+fm6 <- fitMeasures(cfa.model6, fit.measures = want)
+
+comp <- rbind(
+  Model1 = fm1,
+  Model2 = fm2,
+  Model3 = fm3,
+  Model4 = fm4,
+  Model5 = fm5,
+  Model6 = fm6,
+  Delta  = fm1 - fm6)
+round(comp, 3)
+
+```
+
+```{r}
+# 1. Grab key (scaled/robust) measures from lavaan
+want <- c(
+  "chisq.scaled",
+  "df",
+  "pvalue.scaled",          # P for chi-square test
+  "srmr",
+  "rmsea.scaled",
+  "rmsea.ci.lower.scaled",
+  "rmsea.ci.upper.scaled",
+  "rmsea.pvalue.scaled",    # P-value H0: RMSEA <= 0.05  (CIfit)
+  "cfi.scaled",
+  "tli.scaled"
+)
+
+fm1 <- fitMeasures(cfa.model1, fit.measures = want)
+fm2 <- fitMeasures(cfa.model2, fit.measures = want)
+fm3 <- fitMeasures(cfa.model3, fit.measures = want)
+fm4 <- fitMeasures(cfa.model4, fit.measures = want)
+fm5 <- fitMeasures(cfa.model5, fit.measures = want)
+fm6 <- fitMeasures(cfa.model6, fit.measures = want)
+
+# 2. Bind them into one matrix (I would usually drop the Delta row for this type of table)
+comp <- rbind(
+  "Initial model" = fm1,
+  "Model 2"       = fm2,
+  "Model 3"       = fm3,
+  "Model 4"       = fm4,
+  "Model 5"       = fm5,
+  "Model 6"       = fm6
+)
+
+# 3. Turn into a nice data frame with the columns you want
+tab <- as.data.frame(comp)
+tab$Model <- rownames(tab)
+
+cfa_fit_table <- data.frame(
+  Model        = tab$Model,
+  `χ² (df)`    = sprintf("%.3f (%d)", tab$chisq.scaled, as.integer(tab$df)),
+  P            = round(tab$pvalue.scaled, 3),
+  SRMR         = round(tab$srmr, 3),
+  `RMSEA (90% CI)` = sprintf("%.3f (%.3f–%.3f)",
+                             tab$rmsea.scaled,
+                             tab$rmsea.ci.lower.scaled,
+                             tab$rmsea.ci.upper.scaled),
+  CFI          = round(tab$cfi.scaled, 3),
+  TLI          = round(tab$tli.scaled, 3),
+  CIfit        = round(tab$rmsea.pvalue.scaled, 3)   # P-value H0: RMSEA <= 0.05
+)
+
+cfa_fit_table
+
+```
+
+```{r}
+# 1. Select scaled/robust fit indices from lavaan
+want <- c(
+  "chisq.scaled",
+  "df",
+  "pvalue.scaled",
+  "srmr",
+  "rmsea.scaled",
+  "rmsea.ci.lower.scaled",
+  "rmsea.ci.upper.scaled",
+  "cfi.scaled",
+  "tli.scaled"
+)
+
+fm1 <- fitMeasures(cfa.model1, fit.measures = want)
+fm2 <- fitMeasures(cfa.model2, fit.measures = want)
+fm3 <- fitMeasures(cfa.model3, fit.measures = want)
+fm4 <- fitMeasures(cfa.model4, fit.measures = want)
+fm5 <- fitMeasures(cfa.model5, fit.measures = want)
+fm6 <- fitMeasures(cfa.model6, fit.measures = want)
+
+# 2. Combine into a single matrix (drop Delta row)
+comp <- rbind(
+  "Initial model" = fm1,
+  "Model 2"       = fm2,
+  "Model 3"       = fm3,
+  "Model 4"       = fm4,
+  "Model 5"       = fm5,
+  "Model 6"       = fm6
+)
+
+# 3. Convert to data frame
+tab <- as.data.frame(comp)
+tab$Model <- rownames(tab)
+
+# 4. Compute chi-square/df
+tab$chisq_df <- tab$chisq.scaled / tab$df
+
+# 5. Create the final table for your thesis
+cfa_fit_table <- data.frame(
+  Model           = tab$Model,
+  `χ² (df)`       = sprintf("%.3f (%d)", tab$chisq.scaled, as.integer(tab$df)),
+  P               = round(tab$pvalue.scaled, 3),
+  SRMR            = round(tab$srmr, 3),
+  `RMSEA (90% CI)` = sprintf("%.3f (%.3f–%.3f)",
+                             tab$rmsea.scaled,
+                             tab$rmsea.ci.lower.scaled,
+                             tab$rmsea.ci.upper.scaled),
+  CFI             = round(tab$cfi.scaled, 3),
+  TLI             = round(tab$tli.scaled, 3),
+  `χ²/df`         = round(tab$chisq_df, 3)
+)
+
+# Show the final formatted table
+cfa_fit_table
+
+```
+
+```{r}
+anova(cfa.model1, cfa.model6)   # lavaan will use the Satorra–Bentler scaled test when robust estimators are used
+
+```
+
+# Composite reliability
+
+```{r}
+compRelSEM(cfa.model6)
+```
+
+# Path diagram
+
+```{r}
+semPaths(cfa.model6, 'path', 'std', style = 'lisrel', 
+         edge.color = 'black')
+```
