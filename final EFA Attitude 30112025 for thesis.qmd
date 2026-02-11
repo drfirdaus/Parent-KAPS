@@ -331,27 +331,27 @@ PA4 = c("A16","A19","A20","A21","A22","A23","A26","A33","A35")
 ### PA1
 
 ```{r}
-alpha.pa1 = alpha(data2[PA1])
+alpha.pa1 = psych::alpha(data2[PA1])
 print(alpha.pa1, digits = 3)
 ```
 
 ### PA2
 
 ```{r}
-alpha.pa2 = alpha(data2[PA2])
+alpha.pa2 = psych::alpha(data2[PA2])
 print(alpha.pa2, digits = 3)
 ```
 
 ### PA3
 
 ```{r}
-alpha.pa3 = alpha(data2[PA3])
+alpha.pa3 = psych::alpha(data2[PA3])
 print(alpha.pa3, digits = 3)
 ```
 
 ### PA4
 
 ```{r}
-alpha.pa4 = alpha(data2[PA4])
+alpha.pa4 = psych::alpha(data2[PA4])
 print(alpha.pa4, digits = 3)
 ```

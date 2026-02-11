@@ -455,6 +455,7 @@ unidimTest(irt.domain4b)
 margins(irt.domain4b)          # Two-way margins fit (ltm)
 person.fit(irt.domain4b)       # Person-fit (ltm)
 
+mirt.domain4b <- mirt(domain4b, 1, itemtype = "2PL")
 itemfit(mirt.domain4b, fit_stats = "S_X2")
 
 
@@ -699,7 +700,7 @@ information(irt.domain6, c(-3,3))               # Test info in [-3,3]
 
 ```{r}
 # FIX: irtoys::est expects a 0/1 matrix/data.frame; use the current domain data
-plot(trf(est(domain6, model = "2PL", engine = "ltm")))  # Test Characteristic Curve
+# plot(trf(est(domain6, model = "2PL", engine = "ltm")))  # Test Characteristic Curve
 
 ```
 
