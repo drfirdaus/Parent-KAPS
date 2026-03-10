@@ -1,0 +1,1148 @@
+---
+title: "Confirmatory IRT Knowledge V4 for thesis"
+author: "Firdaus"
+format: 
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-depth: 6
+    number-sections: true
+    self-contained: true
+editor: visual
+---
+
+This analysis uses thresholds: Discrimination a ≥ 0.65 (moderate) and Difficulty −3 ≤ b ≤ +3 (Baker, 2001).
+
+# Prepare Environment
+
+## Load Libraries
+
+```{r warning=FALSE}
+library(psych)        # descriptives
+library(foreign)
+library(ltm)          # 2PL via ltm()
+library(irtoys)       # est(), trf()
+library(mirt)         # modern IRT, M2, reliabilities
+library(latticeExtra)
+library(tidyverse)
+library(haven)
+library(writexl)
+library(readxl)
+library(mokken)
+library(dplyr)
+library(corrplot)
+
+select <- dplyr::select
+mutate <- dplyr::mutate
+
+```
+
+## Load Data
+
+```{r}
+data1 <- read_xlsx("CFA Knowledge V4 for thesis.xlsx")  # read data from Excel 
+names(data1)                                  # List variables
+dim(data1)                                    # Expect 37 items x 177 parents
+
+```
+
+### Recode Data
+
+Assumes the response options are exactly: "Ya", "Tidak", "Tidak pasti" (case/spacing handled). Reverse-keyed items: K2, K3, K4, K5, K9, K11.
+
+```{r}
+# Reverse-coded items (as in your script)
+reverse_items <- c("K2", "K3", "K4", "K5", "K9", "K11")
+
+# FIX: ensure we're only recoding item columns (K1:K37) and handle case safely
+item_names <- c(
+  "K1","K2","K3","K4","K5","K6","K8","K9","K10","K11","K13","K14","K15",
+  "K16","K17","K18","K20","K21","K22","K23","K24","K25","K26","K27","K28",
+  "K29","K30","K31","K32","K33","K34","K36","K37","K38","K40","K41"
+)
+
+data2 <- data1 %>%
+  mutate(across(
+    .cols = setdiff(item_names, reverse_items), 
+    .fns  = ~ case_when(
+      tolower(as.character(.)) == "ya"           ~ 1,
+      tolower(as.character(.)) == "tidak"        ~ 0,
+      tolower(as.character(.)) == "tidak pasti"  ~ 2,
+      TRUE ~ NA_real_
+    )
+  )) %>%
+  mutate(across(
+    .cols = reverse_items,
+    .fns  = ~ case_when(
+      tolower(as.character(.)) == "ya"           ~ 0,
+      tolower(as.character(.)) == "tidak"        ~ 1,
+      tolower(as.character(.)) == "tidak pasti"  ~ 2,
+      TRUE ~ NA_real_
+    )
+  ))
+
+
+```
+
+### Recode to Dichotomous
+
+```{r}
+# Recode to dichotomous: 1 = correct; 0 or 2 = incorrect
+data3 <- data2 %>%
+  mutate(across(
+    .cols = all_of(item_names),
+    .fns  = ~ case_when(
+      . == 1 ~ 1,
+      . %in% c(0, 2) ~ 0,
+      TRUE ~ NA_real_
+    )
+  )) %>%
+   dplyr::select(all_of(item_names))   # keep item columns only
+
+summary(data3)
+
+```
+
+### Create Subset Following Theoretical Domain
+
+```{r}
+domain1_items <- c("K1","K2","K3","K4","K5","K6")
+
+domain2_items <- c("K8","K9","K10","K11","K13","K14")
+
+domain3_items <- c("K15","K16","K17","K18","K20")
+
+domain4a_items <- c("K21","K26","K27","K28")
+
+domain4b_items <- c("K22","K23","K24","K25")
+
+domain5a_items <- c("K29","K30","K31","K32","K33")
+
+domain5b_items <- c("K34","K36","K37")
+
+domain6_items <- c("K38","K40","K41")
+
+
+```
+
+```{r}
+domain1 <- data3 %>% select(all_of(domain1_items))
+domain2 <- data3 %>% select(all_of(domain2_items))
+domain3 <- data3 %>% select(all_of(domain3_items))
+domain4a <- data3 %>% select(all_of(domain4a_items))
+domain4b <- data3 %>% select(all_of(domain4b_items))
+domain5a <- data3 %>% select(all_of(domain5a_items))
+domain5b <- data3 %>% select(all_of(domain5b_items))
+domain6 <- data3 %>% select(all_of(domain6_items))
+
+```
+
+# Domain 1
+
+## Descriptives
+
+```{r}
+descript(domain1)
+
+```
+
+### Checking Tetrachoric Correlation
+
+```{r}
+# Compute tetrachoric correlation matrix
+tet.domain1 <- tetrachoric(domain1)
+tet.domain1$rho   # <-- this is the correlation matrix
+
+# Round and print nicely
+round(tet.domain1$rho, 2)
+
+```
+
+```{r}
+corrplot(tet.domain1$rho ,
+         type  = "upper",      # show upper triangle only
+         order = "hclust",     # hierarchical clustering order
+         tl.col = "black",     # item labels in black
+         tl.srt = 45,          # rotate labels
+         addCoef.col = NULL,   # omit correlation text on the plot
+         number.cex = 0.7)
+```
+
+### Checking Factors / Dimensionality
+
+```{r}
+fa.parallel(domain1, fa = "fa", cor = "tet", fm = "pa")  # principal axis FA
+```
+
+```{r}
+fa.domain1 = fa(domain1, nfactors = 1, fm = "pa", rotate = "oblimin" , cor = "tet")
+
+print(fa.domain1, digits = 3)  
+```
+
+## Performing IRT
+
+```{r}
+irt.domain1 <- ltm(domain1 ~ z1, IRT.param = TRUE)
+coef(irt.domain1)
+summary(irt.domain1)
+```
+
+### Remove K6
+
+```{r}
+domain1.1 <- domain1[, setdiff(names(domain1), "K6")]
+
+```
+
+```{r}
+irt.domain1.1 <- ltm(domain1.1 ~ z1, IRT.param = TRUE)
+coef(irt.domain1.1)
+summary(irt.domain1.1)
+
+```
+
+### Remove K1
+
+```{r}
+domain1.2 <- domain1[, setdiff(names(domain1), c("K1", "K6"))]
+```
+
+```{r}
+irt.domain1.2 <- ltm(domain1.2 ~ z1, IRT.param = TRUE)
+coef(irt.domain1.2)
+summary(irt.domain1.2)
+```
+
+### Graphical Presentation
+
+```{r}
+plot(irt.domain1.2, type = "ICC", legend = TRUE)  # Item Characteristic Curves
+plot(irt.domain1.2, type = "IIC", legend = TRUE)  # Item Information Curves
+plot(irt.domain1.2, items = 0, type = "IIC")      # Test Information Function
+information(irt.domain1.2, c(-3,3))               # Test info in [-3,3]
+
+```
+
+```{r}
+plot(trf(est(domain1.2, model = "2PL", engine = "ltm")))  # Test Characteristic Curve
+
+```
+
+```{r}
+mirt.domain1.2 <- mirt(domain1.2, 1, itemtype = "2PL")
+areainfo(mirt.domain1.2, c(-3,3))
+```
+
+## Unidimensionality Test
+
+```{r}
+descript(domain1.2)
+```
+
+```{r}
+set.seed(2025)
+# FIX: unidimTest on data (not on ltm object)
+unidimTest(irt.domain1.2) 
+
+```
+
+```{r}
+fa.domain1.2 = fa(domain1.2, nfactors = 1, fm = "pa", rotate = "oblimin" , cor = "tet")
+
+print(fa.domain1.2, digits = 3) 
+```
+
+```{r}
+mirt.domain1.2 <- mirt(domain1.2, 1, itemtype = "2PL")
+coef(mirt.domain1.2, IRTpars = TRUE, simplify = TRUE)
+areainfo(mirt.domain1.2, c(-3,3))   # test info (mirt)
+
+
+```
+
+## Fit Test
+
+```{r}
+
+margins(irt.domain1.2)          # Two-way margins fit (ltm)
+person.fit(irt.domain1.2)       # Person-fit (ltm)
+
+itemfit(mirt.domain1.2, fit_stats = "S_X2")
+
+
+M2(mirt.domain1.2)                  # M2 (may be NA/err if too few df)
+marginal_rxx(mirt.domain1.2)        # marginal reliability
+
+theta_se.domain1.2 <- fscores(mirt.domain1.2, full.scores.SE = TRUE)
+empirical_rxx(theta_se.domain1.2)
+```
+
+### Comparing Original Domain 1 Vs Post Removal K6 and K1
+
+```{r}
+# Extract AIC and BIC for both models
+AIC_original <- AIC(irt.domain1)
+BIC_original <- BIC(irt.domain1)
+
+AIC_revised  <- AIC(irt.domain1.2)
+BIC_revised  <- BIC(irt.domain1.2)
+
+# Combine into a comparison table
+comparison <- data.frame(
+  Model = c("Domain1 (original)", "Domain1.2 (revised)"),
+  AIC   = c(AIC_original, AIC_revised),
+  BIC   = c(BIC_original, BIC_revised)
+)
+
+print(comparison)
+
+```
+
+# Domain 2
+
+## Descriptives
+
+```{r}
+descript(domain2)
+
+```
+
+### Checking Tetrachoric Correlation
+
+```{r}
+# Compute tetrachoric correlation matrix
+tet.domain2 <- tetrachoric(domain2)
+tet.domain2$rho   # <-- this is the correlation matrix
+
+# Round and print nicely
+round(tet.domain2$rho, 2)
+
+```
+
+```{r}
+corrplot(tet.domain2$rho ,
+         type  = "upper",      # show upper triangle only
+         order = "hclust",     # hierarchical clustering order
+         tl.col = "black",     # item labels in black
+         tl.srt = 45,          # rotate labels
+         addCoef.col = NULL,   # omit correlation text on the plot
+         number.cex = 0.7)
+```
+
+### Checking Factors / Dimensionality
+
+```{r}
+fa.parallel(domain2, fa = "fa", cor = "tet", fm = "pa")  # principal axis FA
+```
+
+```{r}
+fa.domain2 = fa(domain2, nfactors = 1, fm = "pa", rotate = "oblimin" , cor = "tet")
+
+print(fa.domain2, digits = 3) 
+```
+
+## Performing IRT
+
+```{r}
+irt.domain2 <- ltm(domain2 ~ z1, IRT.param = TRUE)
+coef(irt.domain2)
+summary(irt.domain2)
+```
+
+### Graphical Presentation
+
+```{r}
+plot(irt.domain2, type = "ICC", legend = TRUE)  # Item Characteristic Curves
+plot(irt.domain2, type = "IIC", legend = TRUE)  # Item Information Curves
+plot(irt.domain2, items = 0, type = "IIC")      # Test Information Function
+information(irt.domain2, c(-3,3))               # Test info in [-3,3]
+
+```
+
+```{r}
+# FIX: irtoys::est expects a 0/1 matrix/data.frame; use the current domain data
+plot(trf(est(domain2, model = "2PL", engine = "ltm")))  # Test Characteristic Curve
+
+```
+
+```{r}
+mirt.domain2 <- mirt(domain2, 1, itemtype = "2PL")
+areainfo(mirt.domain2, c(-3,3))
+```
+
+## Unidimensionality Test
+
+```{r}
+set.seed(2025)
+# FIX: unidimTest on data (not on ltm object)
+unidimTest(irt.domain2) 
+
+```
+
+```{r}
+
+coef(mirt.domain2, IRTpars = TRUE, simplify = TRUE)
+areainfo(mirt.domain2, c(-3,3))   # test info (mirt)
+
+
+```
+
+## Fit Test
+
+```{r}
+
+margins(irt.domain2)          # Two-way margins fit (ltm)
+person.fit(irt.domain2)       # Person-fit (ltm)
+
+itemfit(mirt.domain2, fit_stats = "S_X2")
+
+
+M2(mirt.domain2)                  # M2 (may be NA/err if too few df)
+marginal_rxx(mirt.domain2)        # marginal reliability
+
+theta_se.domain2 <- fscores(mirt.domain2, full.scores.SE = TRUE)
+empirical_rxx(theta_se.domain2)
+```
+
+### Checking problem with unidimensionality
+
+```{r}
+fa.domain2 = fa(domain2, nfactors = 2, fm = "pa", rotate = "oblimin" , cor = "tet")
+
+print(fa.domain2, digits = 3) 
+```
+
+K9 and K11 is in another factor / dimension
+
+### Remove K11
+
+```{r}
+domain2.1 <- domain2 %>% select(-K11)
+```
+
+```{r}
+descript(domain2.1)
+```
+
+```{r}
+irt.domain2.1 <- ltm(domain2.1 ~ z1, IRT.param = TRUE)
+coef(irt.domain2.1)
+summary(irt.domain2.1)
+```
+
+```{r}
+mirt.domain2.1 <- mirt(domain2.1, 1, itemtype = "2PL")
+areainfo(mirt.domain2.1, c(-3,3))
+
+coef(mirt.domain2.1, IRTpars = TRUE, simplify = TRUE)
+
+```
+
+#### Check unidimensionality after remove K11
+
+```{r}
+set.seed(2025)
+# FIX: unidimTest on data (not on ltm object)
+unidimTest(irt.domain2.1) 
+```
+
+```{r}
+fa.domain2.1 = fa(domain2.1, nfactors = 1, fm = "pa", rotate = "oblimin" , cor = "tet")
+
+print(fa.domain2.1, digits = 3) 
+```
+
+#### Graphical presentation domain 2.1
+
+```{r}
+plot(irt.domain2.1, type = "ICC", legend = TRUE)  # Item Characteristic Curves
+plot(irt.domain2.1, type = "IIC", legend = TRUE)  # Item Information Curves
+plot(irt.domain2.1, items = 0, type = "IIC")      # Test Information Function
+information(irt.domain2.1, c(-3,3))               # Test info in [-3,3]
+```
+
+```{r}
+mirt.domain2.1 <- mirt(domain2.1, 1, itemtype = "2PL")
+areainfo(mirt.domain2.1, c(-3,3))
+coef(mirt.domain2.1, IRTpars = TRUE, simplify = TRUE)
+areainfo(mirt.domain2.1, c(-3,3))   # test info (mirt)
+```
+
+```{r}
+margins(irt.domain2.1)          # Two-way margins fit (ltm)
+person.fit(irt.domain2.1)       # Person-fit (ltm)
+
+itemfit(mirt.domain2.1, fit_stats = "S_X2")
+
+
+M2(mirt.domain2.1)                  # M2 (may be NA/err if too few df)
+marginal_rxx(mirt.domain2.1)        # marginal reliability
+
+theta_se.domain2.1 <- fscores(mirt.domain2.1, full.scores.SE = TRUE)
+empirical_rxx(theta_se.domain2.1)
+```
+
+# Domain 3
+
+## Descriptives
+
+```{r}
+descript(domain3)
+
+```
+
+### Checking Tetrachoric Correlation
+
+```{r}
+# Compute tetrachoric correlation matrix
+tet.domain3 <- tetrachoric(domain3)
+tet.domain3$rho   # <-- this is the correlation matrix
+
+# Round and print nicely
+round(tet.domain3$rho, 2)
+
+```
+
+```{r}
+corrplot(tet.domain3$rho ,
+         type  = "upper",      # show upper triangle only
+         order = "hclust",     # hierarchical clustering order
+         tl.col = "black",     # item labels in black
+         tl.srt = 45,          # rotate labels
+         addCoef.col = NULL,   # omit correlation text on the plot
+         number.cex = 0.7)
+```
+
+### Checking Factors / Dimensionality
+
+```{r}
+fa.parallel(domain3, fa = "fa", cor = "tet", fm = "pa")  # principal axis FA
+```
+
+```{r}
+fa.domain3 = fa(domain3, nfactors = 1, fm = "pa", rotate = "oblimin" , cor = "tet")
+
+print(fa.domain3, digits = 3) 
+```
+
+## Performing IRT
+
+```{r}
+irt.domain3 <- ltm(domain3 ~ z1, IRT.param = TRUE)
+coef(irt.domain3)
+summary(irt.domain3)
+```
+
+### Graphical Presentation
+
+```{r}
+plot(irt.domain3, type = "ICC", legend = TRUE)  # Item Characteristic Curves
+plot(irt.domain3, type = "IIC", legend = TRUE)  # Item Information Curves
+plot(irt.domain3, items = 0, type = "IIC")      # Test Information Function
+information(irt.domain3, c(-3,3))               # Test info in [-3,3]
+
+```
+
+```{r}
+# FIX: irtoys::est expects a 0/1 matrix/data.frame; use the current domain data
+plot(trf(est(domain3, model = "2PL", engine = "ltm")))  # Test Characteristic Curve
+
+```
+
+```{r}
+mirt.domain3 <- mirt(domain3, 1, itemtype = "2PL")
+
+coef(mirt.domain3, IRTpars = TRUE, simplify = TRUE)
+
+areainfo(mirt.domain3, c(-3,3))
+```
+
+## Unidimensionality Test
+
+```{r}
+set.seed(2025)
+# FIX: unidimTest on data (not on ltm object)
+unidimTest(irt.domain3) 
+
+```
+
+```{r}
+
+coef(mirt.domain3, IRTpars = TRUE, simplify = TRUE)
+areainfo(mirt.domain3, c(-3,3))   # test info (mirt)
+
+
+```
+
+## Fit Test
+
+```{r}
+
+margins(irt.domain3)          # Two-way margins fit (ltm)
+person.fit(irt.domain3)       # Person-fit (ltm)
+
+itemfit(mirt.domain3, fit_stats = "S_X2")
+
+
+M2(mirt.domain3)                  # M2 (may be NA/err if too few df)
+marginal_rxx(mirt.domain3)        # marginal reliability
+
+theta_se.domain3 <- fscores(mirt.domain3, full.scores.SE = TRUE)
+empirical_rxx(theta_se.domain3)
+```
+
+# Domain 4a
+
+## Descriptives
+
+```{r}
+descript(domain4a)
+
+```
+
+### Checking Tetrachoric Correlation
+
+```{r}
+# Compute tetrachoric correlation matrix
+tet.domain4a <- tetrachoric(domain4a)
+tet.domain4a$rho   # <-- this is the correlation matrix
+
+# Round and print nicely
+round(tet.domain4a$rho, 2)
+
+```
+
+```{r}
+corrplot(tet.domain4a$rho ,
+         type  = "upper",      # show upper triangle only
+         order = "hclust",     # hierarchical clustering order
+         tl.col = "black",     # item labels in black
+         tl.srt = 45,          # rotate labels
+         addCoef.col = NULL,   # omit correlation text on the plot
+         number.cex = 0.7)
+```
+
+### Checking Factors / Dimensionality
+
+```{r}
+fa.parallel(domain4a, fa = "fa", cor = "tet", fm = "pa")  # principal axis FA
+```
+
+```{r}
+fa.domain4a = fa(domain4a, nfactors = 1, fm = "pa", rotate = "oblimin" , cor = "tet")
+
+print(fa.domain4a, digits = 3) 
+```
+
+## Performing IRT
+
+```{r}
+irt.domain4a <- ltm(domain4a ~ z1, IRT.param = TRUE)
+coef(irt.domain4a)
+summary(irt.domain4a)
+```
+
+### Graphical Presentation
+
+```{r}
+plot(irt.domain4a, type = "ICC", legend = TRUE)  # Item Characteristic Curves
+plot(irt.domain4a, type = "IIC", legend = TRUE)  # Item Information Curves
+plot(irt.domain4a, items = 0, type = "IIC")      # Test Information Function
+information(irt.domain4a, c(-3,3))               # Test info in [-3,3]
+
+```
+
+```{r}
+# FIX: irtoys::est expects a 0/1 matrix/data.frame; use the current domain data
+#plot(trf(est(domain4a, model = "2pl", engine = "ltm")))  # Test Characteristic Curve
+#Error in h(simpleError(msg, call)) :error in evaluating the argument 'x' in selecting a method for function 'plot': Lapack routine dgesv: system is exactly singular: U[1,1] = 0
+
+```
+
+```{r}
+mirt.domain4a <- mirt(domain4a, 1, itemtype = "2PL")
+areainfo(mirt.domain4a, c(-3,3))
+
+
+
+coef(mirt.domain4a, IRTpars = TRUE, simplify = TRUE)
+```
+
+## Unidimensionality Test
+
+```{r}
+set.seed(2025)
+# FIX: unidimTest on data (not on ltm object)
+unidimTest(irt.domain4a) 
+
+```
+
+```{r}
+
+coef(mirt.domain4a, IRTpars = TRUE, simplify = TRUE)
+areainfo(mirt.domain4a, c(-3,3))   # test info (mirt)
+
+
+```
+
+## Fit Test
+
+```{r}
+
+margins(irt.domain4a)          # Two-way margins fit (ltm)
+person.fit(irt.domain4a)       # Person-fit (ltm)
+
+itemfit(mirt.domain4a, fit_stats = "S_X2")
+
+
+M2(mirt.domain4a)                  # M2 (may be NA/err if too few df)
+marginal_rxx(mirt.domain4a)        # marginal reliability
+
+theta_se.domain4a <- fscores(mirt.domain4a, full.scores.SE = TRUE)
+empirical_rxx(theta_se.domain4a)
+```
+
+# Domain 4b
+
+## Descriptives
+
+```{r}
+descript(domain4b)
+
+```
+
+### Checking Tetrachoric Correlation
+
+```{r}
+# Compute tetrachoric correlation matrix
+tet.domain4b <- tetrachoric(domain4b)
+tet.domain4b$rho   # <-- this is the correlation matrix
+
+# Round and print nicely
+round(tet.domain4b$rho, 2)
+
+```
+
+```{r}
+corrplot(tet.domain4b$rho ,
+         type  = "upper",      # show upper triangle only
+         order = "hclust",     # hierarchical clustering order
+         tl.col = "black",     # item labels in black
+         tl.srt = 45,          # rotate labels
+         addCoef.col = NULL,   # omit correlation text on the plot
+         number.cex = 0.7)
+```
+
+### Checking Factors / Dimensionality
+
+```{r}
+fa.parallel(domain4b, fa = "fa", cor = "tet", fm = "pa")  # principal axis FA
+```
+
+```{r}
+fa.domain4b = fa(domain4b, nfactors = 1, fm = "pa", rotate = "oblimin" , cor = "tet")
+
+print(fa.domain4b, digits = 3) 
+```
+
+## Performing IRT
+
+```{r}
+irt.domain4b <- ltm(domain4b ~ z1, IRT.param = TRUE)
+coef(irt.domain4b)
+summary(irt.domain4b)
+```
+
+### Graphical Presentation
+
+```{r}
+plot(irt.domain4b, type = "ICC", legend = TRUE)  # Item Characteristic Curves
+plot(irt.domain4b, type = "IIC", legend = TRUE)  # Item Information Curves
+plot(irt.domain4b, items = 0, type = "IIC")      # Test Information Function
+information(irt.domain4b, c(-3,3))               # Test info in [-3,3]
+
+```
+
+```{r}
+# FIX: irtoys::est expects a 0/1 matrix/data.frame; use the current domain data
+plot(trf(est(domain4b, model = "2PL", engine = "ltm")))  # Test Characteristic Curve
+
+```
+
+```{r}
+mirt.domain4b <- mirt(domain4b, 1, itemtype = "2PL")
+areainfo(mirt.domain4b, c(-3,3))
+
+coef(mirt.domain4b, IRTpars = TRUE, simplify = TRUE)
+```
+
+## Unidimensionality Test
+
+```{r}
+set.seed(2025)
+# FIX: unidimTest on data (not on ltm object)
+unidimTest(irt.domain4b) 
+
+```
+
+```{r}
+
+coef(mirt.domain4b, IRTpars = TRUE, simplify = TRUE)
+areainfo(mirt.domain4b, c(-3,3))   # test info (mirt)
+
+
+```
+
+## Fit Test
+
+```{r}
+
+margins(irt.domain4b)          # Two-way margins fit (ltm)
+person.fit(irt.domain4b)       # Person-fit (ltm)
+
+itemfit(mirt.domain4b, fit_stats = "S_X2")
+
+
+M2(mirt.domain4b)                  # M2 (may be NA/err if too few df)
+marginal_rxx(mirt.domain4b)        # marginal reliability
+
+theta_se.domain4b <- fscores(mirt.domain4b, full.scores.SE = TRUE)
+empirical_rxx(theta_se.domain4b)
+```
+
+# Domain 5a
+
+## Descriptives
+
+```{r}
+descript(domain5a)
+
+```
+
+### Checking Tetrachoric Correlation
+
+```{r}
+# Compute tetrachoric correlation matrix
+tet.domain5a <- tetrachoric(domain5a)
+tet.domain5a$rho   # <-- this is the correlation matrix
+
+# Round and print nicely
+round(tet.domain5a$rho, 2)
+
+```
+
+```{r}
+corrplot(tet.domain5a$rho ,
+         type  = "upper",      # show upper triangle only
+         order = "hclust",     # hierarchical clustering order
+         tl.col = "black",     # item labels in black
+         tl.srt = 45,          # rotate labels
+         addCoef.col = NULL,   # omit correlation text on the plot
+         number.cex = 0.7)
+```
+
+### Checking Factors / Dimensionality
+
+```{r}
+fa.parallel(domain5a, fa = "fa", cor = "tet", fm = "pa")  # principal axis FA
+```
+
+```{r}
+fa.domain5a = fa(domain5a, nfactors = 1, fm = "pa", rotate = "oblimin" , cor = "tet")
+
+print(fa.domain5a, digits = 3) 
+```
+
+## Performing IRT
+
+```{r}
+irt.domain5a <- ltm(domain5a ~ z1, IRT.param = TRUE)
+coef(irt.domain5a)
+summary(irt.domain5a)
+```
+
+### Graphical Presentation
+
+```{r}
+plot(irt.domain5a, type = "ICC", legend = TRUE)  # Item Characteristic Curves
+plot(irt.domain5a, type = "IIC", legend = TRUE)  # Item Information Curves
+plot(irt.domain5a, items = 0, type = "IIC")      # Test Information Function
+information(irt.domain5a, c(-3,3))               # Test info in [-3,3]
+
+```
+
+```{r}
+# FIX: irtoys::est expects a 0/1 matrix/data.frame; use the current domain data
+plot(trf(est(domain5a, model = "2PL", engine = "ltm")))  # Test Characteristic Curve
+
+```
+
+```{r}
+mirt.domain5a <- mirt(domain5a, 1, itemtype = "2PL")
+areainfo(mirt.domain5a, c(-3,3))
+
+coef(mirt.domain5a, IRTpars = TRUE, simplify = TRUE)
+```
+
+## Unidimensionality Test
+
+```{r}
+set.seed(2025)
+# FIX: unidimTest on data (not on ltm object)
+unidimTest(irt.domain5a) 
+
+```
+
+```{r}
+
+coef(mirt.domain5a, IRTpars = TRUE, simplify = TRUE)
+areainfo(mirt.domain5a, c(-3,3))   # test info (mirt)
+
+```
+
+## Fit Test
+
+```{r}
+
+margins(irt.domain5a)          # Two-way margins fit (ltm)
+person.fit(irt.domain5a)       # Person-fit (ltm)
+
+itemfit(mirt.domain5a, fit_stats = "S_X2")
+
+
+M2(mirt.domain5a)                  # M2 (may be NA/err if too few df)
+marginal_rxx(mirt.domain5a)        # marginal reliability
+
+theta_se.domain5a <- fscores(mirt.domain5a, full.scores.SE = TRUE)
+empirical_rxx(theta_se.domain5a)
+```
+
+# Domain 5b
+
+## Descriptives
+
+```{r}
+descript(domain5b)
+
+```
+
+### Checking Tetrachoric Correlation
+
+```{r}
+# Compute tetrachoric correlation matrix
+tet.domain5b <- tetrachoric(domain5b)
+tet.domain5b$rho   # <-- this is the correlation matrix
+
+# Round and print nicely
+round(tet.domain5b$rho, 2)
+
+```
+
+```{r}
+corrplot(tet.domain5b$rho ,
+         type  = "upper",      # show upper triangle only
+         order = "hclust",     # hierarchical clustering order
+         tl.col = "black",     # item labels in black
+         tl.srt = 45,          # rotate labels
+         addCoef.col = NULL,   # omit correlation text on the plot
+         number.cex = 0.7)
+```
+
+### Checking Factors / Dimensionality
+
+```{r}
+fa.parallel(domain5b, fa = "fa", cor = "tet", fm = "pa")  # principal axis FA
+```
+
+```{r}
+fa.domain5b = fa(domain5b, nfactors = 1, fm = "pa", rotate = "oblimin" , cor = "tet")
+
+print(fa.domain5b, digits = 3) 
+```
+
+## Performing IRT
+
+```{r}
+irt.domain5b <- ltm(domain5b ~ z1, IRT.param = TRUE)
+coef(irt.domain5b)
+#summary(irt.domain5b) # Error in solve.default(object$hessian) :
+#Lapack routine dgesv: system is exactly singular: U[1,1] = 0
+```
+
+### Graphical Presentation
+
+```{r}
+plot(irt.domain5b, type = "ICC", legend = TRUE)  # Item Characteristic Curves
+plot(irt.domain5b, type = "IIC", legend = TRUE)  # Item Information Curves
+plot(irt.domain5b, items = 0, type = "IIC")      # Test Information Function
+information(irt.domain5b, c(-3,3))               # Test info in [-3,3]
+
+```
+
+```{r}
+# FIX: irtoys::est expects a 0/1 matrix/data.frame; use the current domain data
+#plot(trf(est(domain5b, model = "2PL", engine = "ltm")))  # Test Characteristic Curve
+#Error in h(simpleError(msg, call)) :error in evaluating the argument 'x' in selecting a method for function 'plot': Lapack routine dgesv: system is exactly singular: U[1,1] = 0
+
+```
+
+```{r}
+mirt.domain5b <- mirt(domain5b, 1, itemtype = "2PL")
+areainfo(mirt.domain5b, c(-3,3))
+
+coef(mirt.domain5b, IRTpars = TRUE, simplify = TRUE)
+```
+
+## Unidimensionality Test
+
+```{r}
+set.seed(2025)
+# FIX: unidimTest on data (not on ltm object)
+unidimTest(irt.domain5b) # Error in eigen(rho., symmetric = TRUE, only.values = TRUE) :
+# infinite or missing values in 'x'
+
+```
+
+```{r}
+
+coef(mirt.domain5b, IRTpars = TRUE, simplify = TRUE)
+areainfo(mirt.domain5b, c(-3,3))   # test info (mirt)
+
+
+```
+
+## Fit Test
+
+```{r}
+
+margins(irt.domain5b)          # Two-way margins fit (ltm)
+person.fit(irt.domain5b)       # Person-fit (ltm)
+
+itemfit(mirt.domain5b, fit_stats = "S_X2")
+
+
+#M2(mirt.domain5b)                  # M2 (err if too few df) 
+marginal_rxx(mirt.domain5b)        # marginal reliability
+
+theta_se.domain5b <- fscores(mirt.domain5b, full.scores.SE = TRUE)
+empirical_rxx(theta_se.domain5b)
+```
+
+# Domain 6
+
+## Descriptives
+
+```{r}
+descript(domain6)
+
+```
+
+### Checking Tetrachoric Correlation
+
+```{r}
+# Compute tetrachoric correlation matrix
+tet.domain6 <- tetrachoric(domain6)
+tet.domain6$rho   # <-- this is the correlation matrix
+
+# Round and print nicely
+round(tet.domain6$rho, 2)
+
+```
+
+```{r}
+corrplot(tet.domain6$rho ,
+         type  = "upper",      # show upper triangle only
+         order = "hclust",     # hierarchical clustering order
+         tl.col = "black",     # item labels in black
+         tl.srt = 45,          # rotate labels
+         addCoef.col = NULL,   # omit correlation text on the plot
+         number.cex = 0.7)
+```
+
+```{r}
+irt.domain6 <- ltm(domain6 ~ z1, IRT.param = TRUE); coef(irt.domain6)
+
+
+#summary(irt.domain6)
+
+```
+
+### Checking Factors / Dimensionality
+
+```{r}
+fa.parallel(domain6, fa = "fa", cor = "tet", fm = "pa")  # principal axis FA
+```
+
+```{r}
+fa.domain6 = fa(domain6, nfactors = 1, fm = "pa", rotate = "oblimin" , cor = "tet")
+
+print(fa.domain6, digits = 3) 
+```
+
+## Performing IRT
+
+```{r}
+irt.domain6 <- ltm(domain6 ~ z1, IRT.param = TRUE)
+coef(irt.domain6)
+#summary(irt.domain6)
+#Error in solve.default(object$hessian) :Lapack routine dgesv: system is exactly singular: U[5,5] = 0
+```
+
+### Graphical Presentation
+
+```{r}
+plot(irt.domain6, type = "ICC", legend = TRUE)  # Item Characteristic Curves
+plot(irt.domain6, type = "IIC", legend = TRUE)  # Item Information Curves
+plot(irt.domain6, items = 0, type = "IIC")      # Test Information Function
+information(irt.domain6, c(-3,3))               # Test info in [-3,3]
+
+```
+
+```{r}
+# FIX: irtoys::est expects a 0/1 matrix/data.frame; use the current domain data
+plot(trf(est(domain6, model = "2PL", engine = "ltm")))  # Test Characteristic Curve
+
+```
+
+```{r}
+mirt.domain6 <- mirt(domain6, 1, itemtype = "2PL")
+areainfo(mirt.domain6, c(-3,3))
+
+coef(mirt.domain6, IRTpars = TRUE, simplify = TRUE)
+```
+
+## Unidimensionality Test
+
+```{r}
+set.seed(2025)
+# FIX: unidimTest on data (not on ltm object)
+unidimTest(irt.domain6) 
+
+```
+
+```{r}
+
+coef(mirt.domain6, IRTpars = TRUE, simplify = TRUE)
+areainfo(mirt.domain6, c(-3,3))   # test info (mirt)
+
+
+```
+
+## Fit Test
+
+```{r}
+
+margins(irt.domain6)          # Two-way margins fit (ltm)
+person.fit(irt.domain6)       # Person-fit (ltm)
+
+itemfit(mirt.domain6, fit_stats = "S_X2")
+
+
+#M2(mirt.domain6)                  # M2 (error too few df)
+marginal_rxx(mirt.domain6)        # marginal reliability
+
+theta_se.domain6 <- fscores(mirt.domain6, full.scores.SE = TRUE)
+empirical_rxx(theta_se.domain6)
+```
